@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "(gdb) 调试 gem5 RISC-V",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/RISCV/gem5.debug",
+            "args": [
+                "configs/stu/simple_cache.py",
+                "--cpu-type=RiscvO3CPU",
+                "--caches",
+                "--l1i_size=32kB",
+                "--l1d_size=32kB",
+                "-c", "mytest/square"
+            ],
+            "stopAtEntry": true, 
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}
