@@ -94,6 +94,31 @@ class SimpleBTB(BranchTargetBuffer):
         Parent.instShiftAmt, "Number of bits to shift instructions by"
     )
 
+class eh2BTB(BranchTargetBuffer):
+    type = "eh2BTB"
+    cxx_class = "gem5::branch_prediction::eh2BTB"
+    cxx_header = "cpu/pred/eh2_btb.hh"
+
+    numEntries = Param.Unsigned(4096, "Number of BTB entries")
+    tagBits = Param.Unsigned(16, "Size of the BTB tags, in bits")
+    instShiftAmt = Param.Unsigned(
+        Parent.instShiftAmt, "Number of bits to shift instructions by"
+    )
+#eh2 config paramaters  
+    BTB_SIZE = Param.Unsigned(512, "Number of BTB entries")
+    BTB_BTAG_SIZE = Param.Unsigned(5, "Size of the BTB tags, in bits")
+    BTB_TOFFSET_SIZE = Param.Unsigned(12, "Size of the offset of the jump target address, in bits")
+    BTB_ADDR_HI = Param.Unsigned(9, "Size of the SRAM address high bits, in bits")
+    BTB_ADDR_LO = Param.Unsigned(3, "Size of the SRAM address low bits, in bits")
+    BTB_BYPASS_ENABLE = Param.Bool(True, "BTB Bypass Logic Enable")
+    BTB_NUM_BYPASS = Param.Unsigned(8, "Bypass Buffer Pointer Bit Width")
+    BTB_INDEX1_HI = Param.Unsigned(0x9, "hash width for btb index form pc")
+    BTB_INDEX1_LO = Param.Unsigned(0x3, "hash width for btb index form pc")
+    BTB_INDEX2_HI = Param.Unsigned(0x10, "hash width for btb index form pc")
+    BTB_INDEX2_LO = Param.Unsigned(0xa, "hash width for btb index form pc")
+    BTB_INDEX3_HI = Param.Unsigned(0x17, "hash width for btb index form pc")
+    BTB_INDEX3_LO = Param.Unsigned(0x11, "hash width for btb index form pc")
+
 
 class IndirectPredictor(SimObject):
     type = "IndirectPredictor"
@@ -146,7 +171,7 @@ class BranchPredictor(SimObject):
         "Low-end CPUs predecoding might be used to identify branches. ",
     )
 
-    btb = Param.BranchTargetBuffer(SimpleBTB(), "Branch target buffer (BTB)")
+    btb = Param.BranchTargetBuffer(eh2BTB(), "Branch target buffer (BTB)")
     ras = Param.ReturnAddrStack(
         ReturnAddrStack(), "Return address stack, set to NULL to disable RAS."
     )
