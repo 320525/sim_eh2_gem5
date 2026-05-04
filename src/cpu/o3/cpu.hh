@@ -55,7 +55,8 @@
 #include "cpu/o3/commit.hh"
 #include "cpu/o3/decode.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
-#include "cpu/o3/fetch.hh"
+#include "cpu/o3/f1f2_fetch.hh"
+#include "cpu/o3/f3_align.hh"
 #include "cpu/o3/free_list.hh"
 #include "cpu/o3/iew.hh"
 #include "cpu/o3/limits.hh"
@@ -401,8 +402,11 @@ class CPU : public BaseCPU
     bool removeInstsThisCycle;
 
   protected:
-    /** The fetch stage. */
-    Fetch fetch;
+    /** The F1/F2 fetch stage. */
+    F1F2Fetch f1f2Fetch;
+
+    /** The F3 align stage. */
+    F3Align f3Align;
 
     /** The decode stage. */
     Decode decode;
@@ -464,8 +468,17 @@ class CPU : public BaseCPU
     /** The main time buffer to do backwards communication. */
     TimeBuffer<TimeStruct> timeBuffer;
 
-    /** The fetch stage's instruction queue. */
-    TimeBuffer<FetchStruct> fetchQueue;
+    /** Raw fetch-line queue between F1/F2 fetch and F3 align. */
+    TimeBuffer<FetchF1F2Struct> f1f2ToF3Queue;
+
+    /** The aligned instruction queue from F3 align to decode. */
+    TimeBuffer<AlignF3Struct> fetchQueue;
+
+    /** Fetch-buffer consume feedback from F3 align to F1/F2 fetch. */
+    TimeBuffer<F3ToF1F2Struct> f3ToF1F2Queue;
+
+    /** One-cycle EXU flush queue used by the split EH2 fetch front end. */
+    TimeBuffer<ExuStruct> exuToFetchQueue;
 
     /** The decode stage's instruction queue. */
     TimeBuffer<DecodeStruct> decodeQueue;
@@ -489,7 +502,7 @@ class CPU : public BaseCPU
 
     /** Changes a stage's status to active within the activity recorder. */
     void
-    activateStage(const StageIdx idx)
+    activateStage(const StageIdx idx)                          //设置流水线阶段活跃的索引
     {
         activityRec.activateStage(idx);
     }
@@ -559,11 +572,11 @@ class CPU : public BaseCPU
                 flags, res, std::move(amo_op), byte_enable);
     }
 
-    /** Used by the fetch unit to get a hold of the instruction port. */
+    /** Used by the F1/F2 fetch unit to get a hold of the instruction port. */
     Port &
     getInstPort() override
     {
-        return fetch.getInstPort();
+        return f1f2Fetch.getInstPort();
     }
 
     /** Get the dcache port (used to find block size for translations). */

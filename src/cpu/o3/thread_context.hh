@@ -114,8 +114,8 @@ class ThreadContext : public gem5::ThreadContext
     InstDecoder *
     getDecoderPtr() override
     {
-        return cpu->fetch.decoder[thread->threadId()];
-    }
+    return cpu->f3Align.getDecoderPtr(thread->threadId());
+    }   
 
     /** Returns a pointer to this CPU. */
     BaseCPU *getCpuPtr() override { return cpu; }

@@ -49,6 +49,7 @@
 #include "cpu/inst_seq.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
 #include "cpu/o3/limits.hh"
+#include "mem/packet.hh"
 #include "sim/faults.hh"
 
 namespace gem5
@@ -56,6 +57,62 @@ namespace gem5
 
 namespace o3
 {
+
+/** Struct that defines the information passed from F1 fetch to F2 fetch. */
+struct FetchF1F2Struct
+{
+    struct Entry
+    {
+        bool valid = false;
+        ThreadID tid = InvalidThreadID;
+        Addr startPC = 0;
+        Addr fetchAddr = 0;
+        Addr nextFetchAddr = 0;
+        Addr predictedTarget = 0;
+        Addr blockAddr = 0;
+        Addr missReplayAddr = 0;
+        bool fetchReq = false;
+        bool fetchReqRaw = false;
+        bool fetchReqWon = false;
+        bool fetchReqF2 = false;
+        bool ready = false;
+        bool fromBtb = false;
+        bool fromReplay = false;
+        bool uncacheable = false;
+        bool iccmAccess = false;
+        bool regionFault = false;
+        bool lineWrap = false;
+        Tick tick = 0;
+        RequestPtr memReq = nullptr;
+
+        uint8_t data[8];
+        uint8_t fetch_data_valid_slots;
+    };
+
+    int size = 0;
+    Entry entries[2];
+    ThreadID tid_won;
+};
+
+
+
+/** Struct that defines the information passed from F3 align to decode. */
+struct AlignF3Struct
+{
+    /** Same contract as \ref FetchStruct: DynInstPtr batch to Decode. */
+    int size = 0;
+    DynInstPtr insts[MaxWidth];
+
+    Fault fetchFault;
+    InstSeqNum fetchFaultSN;
+    bool clearFetchFault;
+};
+
+struct F3ToF1F2Struct
+{
+    bool fb_consume1[2]{};
+    bool fb_consume2[2]{};
+};
 
 /** Struct that defines the information passed from fetch to decode. */
 struct FetchStruct
@@ -101,6 +158,26 @@ struct IEWStruct
     bool includeSquashInst[MaxThreads];
 };
 
+
+//eh2 custom
+struct ExuStruct
+{
+    bool exu_flush_final[2];
+    bool dec_tlu_flush_err_wb[2]; 
+    bool dec_tlu_flush_noredir_wb[2]; 
+    bool dec_tlu_flush_lower_wb[2]; 
+    bool dec_tlu_flush_mp_wb[2];
+    bool dec_tlu_fence_i_wb[2]; 
+    bool dec_tlu_flush_leak_one_wb[2]; 
+    bool dec_tlu_force_halt[2]; 
+
+    std::unique_ptr<PCStateBase> exu_flush_path_final[2];
+    std::unique_ptr<PCStateBase> exu_flush_path_final_lastcycle[2];
+    std::unique_ptr<PCStateBase> dec_tlu_flush_path_wb_lastcycle[2];
+};
+
+
+
 struct IssueStruct
 {
     int size;
@@ -140,10 +217,8 @@ struct TimeStruct
         unsigned freeSQEntries;
         unsigned dispatchedToLQ;
         unsigned dispatchedToSQ;
-
         unsigned iqCount;
         unsigned ldstqCount;
-
         unsigned dispatched;
         bool usedIQ;
         bool usedLSQ;

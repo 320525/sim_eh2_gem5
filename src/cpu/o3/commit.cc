@@ -215,7 +215,7 @@ Commit::setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr)
 }
 
 void
-Commit::setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr)
+Commit::setFetchQueue(TimeBuffer<AlignF3Struct> *fq_ptr)
 {
     fetchQueue = fq_ptr;
 

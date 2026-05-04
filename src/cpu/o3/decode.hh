@@ -117,7 +117,7 @@ class Decode
     void setDecodeQueue(TimeBuffer<DecodeStruct> *dq_ptr);
 
     /** Sets pointer to time buffer coming from fetch. */
-    void setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr);
+    void setFetchQueue(TimeBuffer<AlignF3Struct> *fq_ptr);
 
     /** Sets pointer to list of active threads. */
     void setActiveThreads(std::list<ThreadID> *at_ptr);
@@ -230,10 +230,10 @@ class Decode
     TimeBuffer<DecodeStruct>::wire toRename;
 
     /** Fetch instruction queue interface. */
-    TimeBuffer<FetchStruct> *fetchQueue;
+    TimeBuffer<AlignF3Struct> *fetchQueue;
 
     /** Wire to get fetch's output from fetch queue. */
-    TimeBuffer<FetchStruct>::wire fromFetch;
+    TimeBuffer<AlignF3Struct>::wire fromFetch;
 
     /** Queue of all instructions coming from fetch this cycle. */
     std::queue<DynInstPtr> insts[MaxThreads];

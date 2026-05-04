@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/RISCV/gem5.debug",
             "args": [
-                "configs/stu/simple_cache.py",
+                "configs/stu/eh2_config_gem5.py",
                 "--cpu-type=RiscvO3CPU",
                 "--caches",
                 "--l1i_size=32kB",

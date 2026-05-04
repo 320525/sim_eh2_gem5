@@ -179,7 +179,7 @@ Decode::setDecodeQueue(TimeBuffer<DecodeStruct> *dq_ptr)
 }
 
 void
-Decode::setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr)
+Decode::setFetchQueue(TimeBuffer<AlignF3Struct> *fq_ptr)
 {
     fetchQueue = fq_ptr;
 

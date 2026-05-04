@@ -73,14 +73,15 @@ CPU::CPU(const BaseO3CPUParams &params)
     : BaseCPU(params),
       mmu(params.mmu),
       tickEvent([this]{ tick(); }, "O3CPU tick",
-                false, Event::CPU_Tick_Pri),
+                false, Event::CPU_Tick_Pri),                            //调用cpu的tick()函数 false:事件执行后是否自动销毁对象 Event::CPU_Tick_Pri 事件优先级
       threadExitEvent([this]{ exitThreads(); }, "O3CPU exit threads",
                 false, Event::CPU_Exit_Pri),
 #ifndef NDEBUG
       instcount(0),
 #endif
       removeInstsThisCycle(false),
-      fetch(this, params),
+      f1f2Fetch(this, params),
+      f3Align(this, params),
       decode(this, params),
       rename(this, params),
       iew(this, params),
@@ -103,7 +104,9 @@ CPU::CPU(const BaseO3CPUParams &params)
       isa(numThreads, NULL),
 
       timeBuffer(params.backComSize, params.forwardComSize),
+      f1f2ToF3Queue(params.backComSize, params.forwardComSize),
       fetchQueue(params.backComSize, params.forwardComSize),
+      exuToFetchQueue(params.backComSize, params.forwardComSize),
       decodeQueue(params.backComSize, params.forwardComSize),
       renameQueue(params.backComSize, params.forwardComSize),
       iewQueue(params.backComSize, params.forwardComSize),
@@ -116,8 +119,8 @@ CPU::CPU(const BaseO3CPUParams &params)
       lastRunningCycle(curCycle()),
       cpuStats(this)
 {
-    fatal_if(FullSystem && params.numThreads > 1,
-            "SMT is not supported in O3 in full system mode currently.");
+    // fatal_if(FullSystem && params.numThreads > 1,
+    //         "SMT is not supported in O3 in full system mode currently.");
 
     fatal_if(!FullSystem && params.numThreads < params.workload.size(),
             "More workload items (%d) than threads (%d) on CPU %s.",
@@ -132,7 +135,7 @@ CPU::CPU(const BaseO3CPUParams &params)
     if (params.checker) {
         BaseCPU *temp_checker = params.checker;
         checker = dynamic_cast<Checker<DynInstPtr> *>(temp_checker);
-        checker->setIcachePort(&fetch.getInstPort());
+        checker->setIcachePort(&f1f2Fetch.getInstPort());
         checker->setSystem(params.system);
     } else {
         checker = NULL;
@@ -148,21 +151,28 @@ CPU::CPU(const BaseO3CPUParams &params)
     // to the upper level CPU, and not this CPU.
 
     // Set up Pointers to the activeThreads list for each stage
-    fetch.setActiveThreads(&activeThreads);
+    f1f2Fetch.setActiveThreads(&activeThreads);
+    f3Align.setActiveThreads(&activeThreads);
     decode.setActiveThreads(&activeThreads);
     rename.setActiveThreads(&activeThreads);
     iew.setActiveThreads(&activeThreads);
     commit.setActiveThreads(&activeThreads);
 
     // Give each of the stages the time buffer they will use.
-    fetch.setTimeBuffer(&timeBuffer);
+    f1f2Fetch.setTimeBuffer(&timeBuffer);
+    f3Align.setTimeBuffer(&timeBuffer);
     decode.setTimeBuffer(&timeBuffer);
     rename.setTimeBuffer(&timeBuffer);
     iew.setTimeBuffer(&timeBuffer);
     commit.setTimeBuffer(&timeBuffer);
 
     // Also setup each of the stages' queues.
-    fetch.setFetchQueue(&fetchQueue);
+    f1f2Fetch.setFetchQueue(&f1f2ToF3Queue);
+    f1f2Fetch.setFromF3Align(&f3ToF1F2Queue);
+    f1f2Fetch.setFromExuOneCycle(&exuToFetchQueue);
+    f3Align.setF1F2Buffer(&f1f2ToF3Queue);
+    f3Align.setFetchQueue(&fetchQueue);
+    f3Align.setToF1F2FetchQueue(&f3ToF1F2Queue);
     decode.setFetchQueue(&fetchQueue);
     commit.setFetchQueue(&fetchQueue);
     decode.setDecodeQueue(&decodeQueue);
@@ -273,8 +283,8 @@ CPU::CPU(const BaseO3CPUParams &params)
     for (ThreadID tid = 0; tid < numThreads; ++tid) {
         if (FullSystem) {
             // SMT is not supported in FS mode yet.
-            assert(numThreads == 1);
-            thread[tid] = new ThreadState(this, 0, NULL);
+            //assert(numThreads == 1);
+            thread[tid] = new ThreadState(this, tid, NULL);
         } else {
             if (tid < params.workload.size()) {
                 DPRINTF(O3CPU, "Workload[%i] process is %#x", tid,
@@ -330,7 +340,6 @@ CPU::regProbePoints()
         std::pair<DynInstPtr, PacketPtr>>(
                 getProbeManager(), "DataAccessComplete");
 
-    fetch.regProbePoints();
     rename.regProbePoints();
     iew.regProbePoints();
     commit.regProbePoints();
@@ -372,7 +381,9 @@ CPU::tick()
 //    activity = false;
 
     //Tick each of the stages
-    fetch.tick();
+    f1f2Fetch.tick();
+
+    f3Align.tick();
 
     decode.tick();
 
@@ -385,7 +396,10 @@ CPU::tick()
     // Now advance the time buffers
     timeBuffer.advance();
 
+    f1f2ToF3Queue.advance();
     fetchQueue.advance();
+    f3ToF1F2Queue.advance();
+    exuToFetchQueue.advance();
     decodeQueue.advance();
     renameQueue.advance();
     iewQueue.advance();
@@ -440,7 +454,8 @@ CPU::startup()
 {
     BaseCPU::startup();
 
-    fetch.startupStage();
+    f1f2Fetch.startupStage();
+    f3Align.startupStage();
     decode.startupStage();
     iew.startupStage();
     rename.startupStage();
@@ -483,7 +498,6 @@ CPU::deactivateThread(ThreadID tid)
         activeThreads.erase(thread_it);
     }
 
-    fetch.deactivateThread(tid);
     commit.deactivateThread(tid);
 }
 
@@ -526,15 +540,13 @@ CPU::activateContext(ThreadID tid)
         return;
 
     // If we are time 0 or if the last activation time is in the past,
-    // schedule the next tick and wake up the fetch unit
+    // schedule the next tick and wake up the F1/F2 fetch unit.
     if (lastActivatedCycle == 0 || lastActivatedCycle < curTick()) {
         scheduleTickEvent(Cycles(0));
 
         // Be sure to signal that there's some activity so the CPU doesn't
         // deschedule itself.
         activityRec.activity();
-        fetch.wakeFromQuiesce();
-
         Cycles cycles(curCycle() - lastRunningCycle);
         // @todo: This is an oddity that is only here to match the stats
         if (cycles != 0)
@@ -646,7 +658,8 @@ CPU::removeThread(ThreadID tid)
     // clear all thread-specific states in each stage of the pipeline
     // since this thread is going to be completely removed from the CPU
     commit.clearStates(tid);
-    fetch.clearStates(tid);
+    f1f2Fetch.clearStates(tid);
+    f3Align.clearStates(tid);
     decode.clearStates(tid);
     rename.clearStates(tid);
     iew.clearStates(tid);
@@ -654,7 +667,9 @@ CPU::removeThread(ThreadID tid)
     // Flush out any old data from the time buffers.
     for (int i = 0; i < timeBuffer.getSize(); ++i) {
         timeBuffer.advance();
+        f1f2ToF3Queue.advance();
         fetchQueue.advance();
+        exuToFetchQueue.advance();
         decodeQueue.advance();
         renameQueue.advance();
         iewQueue.advance();
@@ -738,8 +753,8 @@ CPU::drain()
     // We only need to signal a drain to the commit stage as this
     // initiates squashing controls the draining. Once the commit
     // stage commits an instruction where it is safe to stop, it'll
-    // squash the rest of the instructions in the pipeline and force
-    // the fetch stage to stall. The pipeline will be drained once all
+    // squash the rest of the instructions in the pipeline and stop
+    // F1/F2 fetch. The pipeline will be drained once all
     // in-flight instructions have retired.
     commit.drain();
 
@@ -770,11 +785,13 @@ CPU::drain()
 
         // Flush out any old data from the time buffers.  In
         // particular, there might be some data in flight from the
-        // fetch stage that isn't visible in any of the CPU buffers we
+        // F1/F2 fetch stage that isn't visible in any of the CPU buffers we
         // test in isCpuDrained().
         for (int i = 0; i < timeBuffer.getSize(); ++i) {
             timeBuffer.advance();
+            f1f2ToF3Queue.advance();
             fetchQueue.advance();
+            exuToFetchQueue.advance();
             decodeQueue.advance();
             renameQueue.advance();
             iewQueue.advance();
@@ -804,7 +821,6 @@ void
 CPU::drainSanityCheck() const
 {
     assert(isCpuDrained());
-    fetch.drainSanityCheck();
     decode.drainSanityCheck();
     rename.drainSanityCheck();
     iew.drainSanityCheck();
@@ -818,11 +834,6 @@ CPU::isCpuDrained() const
 
     if (!instList.empty() || !removeList.empty()) {
         DPRINTF(Drain, "Main CPU structures not drained.\n");
-        drained = false;
-    }
-
-    if (!fetch.isDrained()) {
-        DPRINTF(Drain, "Fetch not drained.\n");
         drained = false;
     }
 
@@ -849,7 +860,7 @@ CPU::isCpuDrained() const
     return drained;
 }
 
-void CPU::commitDrained(ThreadID tid) { fetch.drainStall(tid); }
+void CPU::commitDrained(ThreadID tid) {}
 
 void
 CPU::drainResume()
@@ -860,7 +871,6 @@ CPU::drainResume()
     DPRINTF(Drain, "Resuming...\n");
     verifyMemoryMode();
 
-    fetch.drainResume();
     commit.drainResume();
 
     _status = Idle;
@@ -899,7 +909,8 @@ CPU::takeOverFrom(BaseCPU *oldCPU)
 {
     BaseCPU::takeOverFrom(oldCPU);
 
-    fetch.takeOverFrom();
+    f1f2Fetch.resetStage();
+    f3Align.resetStage();
     decode.takeOverFrom();
     rename.takeOverFrom();
     iew.takeOverFrom();
@@ -1130,11 +1141,11 @@ CPU::squashFromTC(ThreadID tid)
 }
 
 CPU::ListIt
-CPU::addInst(const DynInstPtr &inst)
+CPU::addInst(const DynInstPtr &inst)          //新创建的动态指令（DynInst）注册到CPU 的“全局指令总表”（instList)
 {
     instList.push_back(inst);
 
-    return --(instList.end());
+    return --(instList.end());               //返回新指令在instList中的迭代器 迭代器功能类似指针 instList.end()指向的是最后一个元素的下一个位置
 }
 
 void
@@ -1214,13 +1225,13 @@ CPU::removeInstsNotInROB(ThreadID tid)
 }
 
 void
-CPU::removeInstsUntil(const InstSeqNum &seq_num, ThreadID tid)
+CPU::removeInstsUntil(const InstSeqNum &seq_num, ThreadID tid)     //删除流水线中序列号大于seq_num的指令
 {
     assert(!instList.empty());
 
     removeInstsThisCycle = true;
 
-    ListIt inst_iter = instList.end();
+    ListIt inst_iter = instList.end();                //std::list<DynInstPtr> instList; 保存了流水线中所有指令的列表
 
     inst_iter--;
 
@@ -1244,7 +1255,7 @@ CPU::removeInstsUntil(const InstSeqNum &seq_num, ThreadID tid)
 void
 CPU::squashInstIt(const ListIt &instIt, ThreadID tid)
 {
-    if ((*instIt)->threadNumber == tid) {
+    if ((*instIt)->threadNumber == tid) {               //只删除线程数相同的指令
         DPRINTF(O3CPU, "Squashing instruction, "
                 "[tid:%i] [sn:%lli] PC %s\n",
                 (*instIt)->threadNumber,
@@ -1315,7 +1326,7 @@ CPU::wakeDependents(const DynInstPtr &inst)
 void
 CPU::wakeCPU()
 {
-    if (activityRec.active() || tickEvent.scheduled()) {
+    if (activityRec.active() || tickEvent.scheduled()) {   //tickEvent.scheduled()检查tickEvent是否已经/正在被调度
         DPRINTF(Activity, "CPU already running.\n");
         return;
     }
@@ -1330,7 +1341,7 @@ CPU::wakeCPU()
         baseStats.numCycles += cycles;
     }
 
-    schedule(tickEvent, clockEdge());
+    schedule(tickEvent, clockEdge());                    //推进一个tick 并执行cpu中的tick函数
 }
 
 void

@@ -146,7 +146,7 @@ class Commit
     /** Sets the main time buffer pointer, used for backwards communication. */
     void setTimeBuffer(TimeBuffer<TimeStruct> *tb_ptr);
 
-    void setFetchQueue(TimeBuffer<FetchStruct> *fq_ptr);
+    void setFetchQueue(TimeBuffer<AlignF3Struct> *fq_ptr);
 
     /** Sets the pointer to the queue coming from rename. */
     void setRenameQueue(TimeBuffer<RenameStruct> *rq_ptr);
@@ -321,9 +321,9 @@ class Commit
     /** Wire to read information from IEW (for ROB). */
     TimeBuffer<TimeStruct>::wire robInfoFromIEW;
 
-    TimeBuffer<FetchStruct> *fetchQueue;
+    TimeBuffer<AlignF3Struct> *fetchQueue;
 
-    TimeBuffer<FetchStruct>::wire fromFetch;
+    TimeBuffer<AlignF3Struct>::wire fromFetch;
 
     /** IEW instruction queue interface. */
     TimeBuffer<IEWStruct> *iewQueue;
