@@ -9,6 +9,7 @@ SimObject('BranchPredictor.py',
         'eh2BTB',
         'eh2BHT',
         'ReturnAddrStack',
+        # 'EH2BranchPredictor',
     ],
     enums=['BranchType', 'TargetProvider'])
 

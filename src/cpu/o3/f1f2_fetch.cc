@@ -218,7 +218,8 @@ F1F2Fetch::tick()
     fetch_req_f2[0] = get_fetch_req_f2(fetch_req_f1_lastcycle[0], 0);
     fetch_req_f2[1] = get_fetch_req_f2(fetch_req_f1_lastcycle[1], 1);
     
-    tid_won = tidarbiter(fetch_req_f1[0], fetch_req_f1[1]);       
+    //tid_won = tidarbiter(fetch_req_f1[0], fetch_req_f1[1]);   
+    tid_won = 0;    
     
     // if (F1F2ToAlignF3Buffer) {
     //     for (int t = 0; t < 2; ++t) {
@@ -298,7 +299,7 @@ F1F2Fetch::tick()
 void
 F1F2Fetch::sel_addr_bf(ThreadID tid, PCStateBase &pc, PCStateBase &btb_pc, PCStateBase &miss_addr_pc)
 {
-    assert(tid < numThreads);
+    //assert(tid < numThreads);
 
     // bool miss_sel_flush = flush_fb_lastcycle[tid] && (tid != tid_won_lastcycle || fetchStateLastCycle[tid] == FetchState::Idle);
     // bool sel_last_addr = !(fetch_req_f1_lastcycle[tid] && (tid_won_lastcycle == tid)) && fetch_req_f2_lastcycle[tid] && !my_bp_kill_next_f2_lastcycle[tid];

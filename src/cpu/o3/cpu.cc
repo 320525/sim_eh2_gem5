@@ -106,6 +106,7 @@ CPU::CPU(const BaseO3CPUParams &params)
       timeBuffer(params.backComSize, params.forwardComSize),
       f1f2ToF3Queue(params.backComSize, params.forwardComSize),
       fetchQueue(params.backComSize, params.forwardComSize),
+      f3ToF1F2Queue(1, 0),
       exuToFetchQueue(params.backComSize, params.forwardComSize),
       decodeQueue(params.backComSize, params.forwardComSize),
       renameQueue(params.backComSize, params.forwardComSize),

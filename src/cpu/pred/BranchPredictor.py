@@ -188,35 +188,32 @@ class SimpleIndirectPredictor(IndirectPredictor):
 #         "indirect predictions",
 #     )
 
+
 class BranchPredictor(SimObject):
     type = "BranchPredictor"
     cxx_class = "gem5::branch_prediction::eh2_pred"
     cxx_header = "cpu/pred/eh2_pred.hh"
-    abstract = True
+    # abstract = True
 
     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
     instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
-    # requiresBTBHit = Param.Bool(
-    #     False,
-    #     "Requires the BTB to hit for returns and indirect branches. For an"
-    #     "advanced front-end there is no other way than a BTB hit to know "
-    #     "that the branch exists in the first place. Furthermore, the BPU "
-    #     "needs to know the branch type to make the correct RAS operations. "
-    #     "This info is only available from the BTB. "
-    #     "Low-end CPUs predecoding might be used to identify branches. ",
-    # )
-
     btb = Param.eh2BTB(eh2BTB(), "Branch target buffer (BTB)")
     ras = Param.ReturnAddrStack(
         ReturnAddrStack(), "Return address stack, set to NULL to disable RAS."
     )
     bht = Param.eh2BHT(eh2BHT(), "eh2 bht")
-    # indirectBranchPred = Param.IndirectPredictor(
-    #     SimpleIndirectPredictor(),
-    #     "Indirect branch predictor, set to NULL to disable "
-    #     "indirect predictions",
-    # )
 
+# class EH2BranchPredictor(SimObject):
+#     type = "EH2BranchPredictor"
+#     cxx_class = "gem5::branch_prediction::eh2_pred"
+#     cxx_header = "cpu/pred/eh2_pred.hh"
+#     numThreads = Param.Unsigned(Parent.numThreads, "Number of threads")
+#     instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
+#     btb = Param.eh2BTB(eh2BTB(), "Branch target buffer (BTB)")
+#     ras = Param.ReturnAddrStack(
+#         ReturnAddrStack(), "Return address stack, set to NULL to disable RAS."
+#     )
+#     bht = Param.eh2BHT(eh2BHT(), "eh2 bht")
 
 # class LocalBP(BranchPredictor):
 #     type = "LocalBP"
