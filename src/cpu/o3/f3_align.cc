@@ -131,19 +131,21 @@ F3Align::tick()
     }
 
     ThreadID tid_won = fromF1F2->tid_won;
-    if (fromF1F2->size == 0 || tid_won >= numThreads ||
-        !fromF1F2->entries[tid_won].valid) {
-        updatedff();
-        return;
-    }
+    // if (fromF1F2->size == 0 || tid_won >= numThreads ||
+    //     !fromF1F2->entries[tid_won].valid) {
+    //     updatedff();
+    //     return;
+    // }
 
-    update_fetchbuffer(tid_won);
+    //update_fetchbuffer(tid_won);
     
     instruction_block instr_temp{};
     get_instr(tid_won, &instr_temp);
 
     predecodeAndMaterializeAlignedInsts(tid_won, instr_temp);
-
+    
+    update_fetchbuffer(tid_won);
+    
     updatedff();
 }
 
@@ -162,6 +164,7 @@ F3Align::fetchbufferslots_shift(FetchDataBlock* fetchbuffer)
         }
     }
     fetchbuffer_temp.fb_valid_slots_num = fetchbuffer->fb_valid_slots_num_nextcycle;
+    fetchbuffer_temp.fetch_firstslot_pcaddr =fetchbuffer->fetch_firstslot_pcaddr + shift_slots * 2;
     *fetchbuffer = fetchbuffer_temp;
 }
 
@@ -194,13 +197,14 @@ void
 F3Align::update_fetchbuffer(ThreadID tid)
 {
     auto packFetchData = [&](int low) -> uint16_t {
-        return (static_cast<uint16_t>(fromF1F2->entries[tid].data[low]) << 8) |
-                static_cast<uint16_t>(fromF1F2->entries[tid].data[low + 1]);
+        return (static_cast<uint16_t>(fromF1F2->entries[tid].data[low + 1]) << 8) |
+                static_cast<uint16_t>(fromF1F2->entries[tid].data[low]);
     };
 
     //temporary fetchbuffer use for substitute fetchbuffer
     FetchDataBlock fetchbuffer_temp{};
     fetchbuffer_temp.fb_valid_slots_num = fromF1F2->entries[tid].fetch_data_valid_slots;
+    fetchbuffer_temp.fetch_firstslot_pcaddr = fromF1F2->entries[tid].fetchAddr;
     for(int i = 0; i < fromF1F2->entries[tid].fetch_data_valid_slots; i++)
     {
         fetchbuffer_temp.fetchbufferdata[i] = packFetchData(2 * i);
@@ -215,21 +219,47 @@ F3Align::update_fetchbuffer(ThreadID tid)
     fetchbuffer_shift(shift, tid);
     
     //update fetchbuffer3
-    if(fetchtof3_lastcycle[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
-    {
-        fetchbuffer3[tid] = fetchbuffer_temp;
+    // if(fetchtof3[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    // {
+    //     fetchbuffer3[tid] = fetchbuffer_temp;
+    // }
+    // if(fetchtof2[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    // {
+    //     fetchbuffer2[tid] = fetchbuffer_temp;
+    // }
+    // if(fetchtof1[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    // {
+    //     fetchbuffer1[tid] = fetchbuffer_temp;
+    // }
+    // if(fetchtof0[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    // {
+    //     fetchbuffer0[tid] = fetchbuffer_temp;
+    // }
+
+    if (fromF1F2->size == 0||
+        !fromF1F2->entries[tid].valid) {
+        return;
     }
-    if(fetchtof2_lastcycle[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
-    {
-        fetchbuffer2[tid] = fetchbuffer_temp;
-    }
-    if(fetchtof1_lastcycle[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
-    {
-        fetchbuffer1[tid] = fetchbuffer_temp;
-    }
-    if(fetchtof0_lastcycle[tid] && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    //after update fetchbuffer valid
+    if(fetchbuffer0[tid].fb_valid_slots_num == 0 && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
     {
         fetchbuffer0[tid] = fetchbuffer_temp;
+        return;
+    }
+    if(fetchbuffer1[tid].fb_valid_slots_num == 0 && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    {
+        fetchbuffer1[tid] = fetchbuffer_temp;
+        return;
+    }
+    if(fetchbuffer2[tid].fb_valid_slots_num == 0 && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    {
+        fetchbuffer2[tid] = fetchbuffer_temp;
+        return;
+    }
+    if(fetchbuffer3[tid].fb_valid_slots_num == 0 && fromF1F2->entries[tid].fetch_data_valid_slots > 0)
+    {
+        fetchbuffer3[tid] = fetchbuffer_temp;
+        return;
     }
 }
 
@@ -246,6 +276,7 @@ F3Align::get_fetchdata_align(ThreadID tid, FetchDataAlginBlock* fetchdata_align)
         fetchdata_align->data2B[i] = false;
     }
     
+    fetchdata_align->fetch_algin_buffer_start_addr = fetchbuffer0[tid].fetch_firstslot_pcaddr;
     for(int i = 0; i < 4 && idx < 4; ++i)
     {
         if(fetchbuffer0[tid].fetchbuffervalid[i])
@@ -320,6 +351,7 @@ F3Align::update_f0f1_valid_slots(bool inst0_2B, bool inst1_2B, bool inst0_valid,
     }
     else
     {
+        fetchbuffer1[tid].fb_valid_slots_num_nextcycle = fetchbuffer1[tid].fb_valid_slots_num;
         fetchbuffer0[tid].fb_valid_slots_num_nextcycle = fetchbuffer0[tid].fb_valid_slots_num - used_slots;
         toF1F2Fetch->fb_consume1[tid] = false;
         toF1F2Fetch->fb_consume2[tid] = false;
@@ -330,7 +362,7 @@ F3Align::update_f0f1_valid_slots(bool inst0_2B, bool inst1_2B, bool inst0_valid,
 void 
 F3Align::get_fetchbuffer_update(ThreadID tid)
 {
-    hold[tid] = fetchbuffer0[tid].fb_valid_slots_num_nextcycle > 0;
+    //hold[tid] = fetchbuffer0[tid].fb_valid_slots_num_nextcycle > 0;
     f1tof0[tid] = fetchbuffer0[tid].fb_valid_slots_num_nextcycle == 0 && fetchbuffer1[tid].fb_valid_slots_num_nextcycle > 0;
     f2tof0[tid] = fetchbuffer0[tid].fb_valid_slots_num_nextcycle == 0 && fetchbuffer1[tid].fb_valid_slots_num_nextcycle == 0 && fetchbuffer2[tid].fb_valid_slots_num_nextcycle > 0;
 
@@ -391,10 +423,16 @@ F3Align::get_instr(ThreadID tid, instruction_block* Instr)
     Instr->inst0_2B = inst0_2B;
     Instr->inst1_2B = inst1_2B;
     
-    Instr->inst0_valid = fetchdata_align.fetchbuffervalid[inst0_idx] &&
-                         (inst0_2B || fetchdata_align.fetchbuffervalid[inst0_idx + 1]);
-    Instr->inst1_valid = fetchdata_align.fetchbuffervalid[inst1_idx] &&
-                         (inst1_2B || fetchdata_align.fetchbuffervalid[inst1_idx + 1]);
+    bool ibuffer_room1_more = 1;
+    bool ibuffer_room2_more = 0;
+
+    Instr->inst0_valid = (fetchdata_align.fetchbuffervalid[inst0_idx] &&
+                         (inst0_2B || fetchdata_align.fetchbuffervalid[inst0_idx + 1])) && ibuffer_room1_more;
+    Instr->inst1_valid = (fetchdata_align.fetchbuffervalid[inst1_idx] &&
+                         (inst1_2B || fetchdata_align.fetchbuffervalid[inst1_idx + 1])) && ibuffer_room2_more;
+
+    Instr->inst0_addr = fetchdata_align.fetch_algin_buffer_start_addr;
+    Instr->inst1_addr = Instr->inst0_addr + (Instr->inst0_2B ? 2 : 4);
     
     Instr->inst0 = packInst(inst0_idx, inst0_2B);
     Instr->inst1 = packInst(inst1_idx, inst1_2B);

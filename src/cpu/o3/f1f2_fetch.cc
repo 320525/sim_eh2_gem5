@@ -506,9 +506,9 @@ F1F2Fetch::updateFbFullPoint()
         current_fb_count[i] = (fetch_req_f1_lastcycle[i] && tid_won_lastcycle == i) ? 1 : 0;
     } else {
         int consumed = 0;
-        if (fb_consume2_lastcycle[i]) {
+        if (fromAlignF3 -> fb_consume2[i]) {
             consumed = 2;
-        } else if (fb_consume1_lastcycle[i]) {
+        } else if (fromAlignF3 -> fb_consume1[i]) {
             consumed = 1;
         }
         int pushed = (fetch_req_f1_lastcycle[i] && tid_won_lastcycle == i) ? 1 : 0;

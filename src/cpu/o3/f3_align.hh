@@ -100,6 +100,7 @@ class F3Align
         std::array<bool, 4> fetchbuffervalid{};
         uint8_t fb_valid_slots_num;
         uint8_t fb_valid_slots_num_nextcycle;
+        Addr fetch_firstslot_pcaddr;
     };
 
     struct FetchDataAlginBlock
@@ -109,16 +110,19 @@ class F3Align
         std::array<bool, 4> data2B{};
         std::array<bool, 4> data_fb{};
         std::array<uint8_t, 4> data_fbslot{};
+        Addr fetch_algin_buffer_start_addr;
     };
 
     struct instruction_block
     {
-        int inst0;
-        int inst1;
+        uint32_t inst0;
+        uint32_t inst1;
         bool inst0_valid;
         bool inst1_valid;
         bool inst0_2B;
         bool inst1_2B;
+        Addr inst0_addr;
+        Addr inst1_addr;
     };
 
     std::array<FetchDataBlock, 2> fetchbuffer0{};
