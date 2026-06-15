@@ -42,6 +42,7 @@
 #ifndef __CPU_PRED_2BIT_LOCAL_PRED_HH__
 #define __CPU_PRED_2BIT_LOCAL_PRED_HH__
 
+#include <array>
 #include <vector>
 
 #include "base/sat_counter.hh"
@@ -70,7 +71,9 @@ class eh2BHT : public SimObject
      */
     eh2BHT(const eh2BHTParams &params);
 
-    unsigned eh2bhtlookup(Addr fetch_addr, unsigned ghr);
+    unsigned eh2bhtlookup(Addr fetch_addr, unsigned ghr,
+                          std::array<uint8_t, 4> &count,
+                          std::array<bool, 4> &taken);
     void eh2bhtupdate(Addr fetch_addr, unsigned ghr, uint8_t data,
                       bool write_en);
 
@@ -83,7 +86,7 @@ class eh2BHT : public SimObject
      */
     inline bool getPrediction(uint8_t &count);
 
-    bool eh2bhtlookup_slot(Addr fetch_addr, unsigned ghr);
+    bool eh2bhtlookup_slot(Addr fetch_addr, unsigned ghr, uint8_t &count);
     unsigned extractBits(Addr w, unsigned hi, unsigned lo) const;
     unsigned addrHashbtb(Addr instPC) const;
     unsigned addrHash(Addr instPC, unsigned ghr) const;

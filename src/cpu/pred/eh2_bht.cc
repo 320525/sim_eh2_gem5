@@ -148,7 +148,7 @@ eh2BHT::addrHash(Addr instPC, unsigned ghr) const
 
 
 bool
-eh2BHT::eh2bhtlookup_slot(Addr fetch_addr, unsigned ghr)
+eh2BHT::eh2bhtlookup_slot(Addr fetch_addr, unsigned ghr, uint8_t &count)
 {
     bool taken;
   
@@ -156,20 +156,27 @@ eh2BHT::eh2bhtlookup_slot(Addr fetch_addr, unsigned ghr)
 
 
     uint8_t counter_val = eh2localCtrs[local_predictor_idx];              
-
+    count = counter_val;
 
     taken = getPrediction(counter_val);                               
 
     return taken;
 }
 
+
 unsigned
-eh2BHT::eh2bhtlookup(Addr fetch_addr, unsigned ghr)
+eh2BHT::eh2bhtlookup(Addr fetch_addr, unsigned ghr,
+                     std::array<uint8_t, 4> &count,
+                     std::array<bool, 4> &taken)
 {
-    bool taken_slot0 = eh2bhtlookup_slot(fetch_addr, ghr);
-    bool taken_slot1 = eh2bhtlookup_slot(fetch_addr+2, ghr);
-    bool taken_slot2 = eh2bhtlookup_slot(fetch_addr+4, ghr);
-    bool taken_slot3 = eh2bhtlookup_slot(fetch_addr+6, ghr);
+    bool taken_slot0 = eh2bhtlookup_slot(fetch_addr, ghr, count[0]);
+    bool taken_slot1 = eh2bhtlookup_slot(fetch_addr+2, ghr, count[1]);
+    bool taken_slot2 = eh2bhtlookup_slot(fetch_addr+4, ghr, count[2]);
+    bool taken_slot3 = eh2bhtlookup_slot(fetch_addr+6, ghr, count[3]);
+    taken[0] = taken_slot0;
+    taken[1] = taken_slot1;
+    taken[2] = taken_slot2;
+    taken[3] = taken_slot3;
 
     // Return packed 4-bit prediction in slot order: {slot0, slot1, slot2, slot3}.
     return (static_cast<unsigned>(taken_slot3) << 3) |
@@ -177,6 +184,7 @@ eh2BHT::eh2bhtlookup(Addr fetch_addr, unsigned ghr)
            (static_cast<unsigned>(taken_slot1) << 1) |
            static_cast<unsigned>(taken_slot0);
 }
+
 
 void
 eh2BHT::eh2bhtupdate(Addr fetch_addr, unsigned ghr, uint8_t data, bool write_en)

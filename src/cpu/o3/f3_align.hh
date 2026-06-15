@@ -101,6 +101,13 @@ class F3Align
         uint8_t fb_valid_slots_num;
         uint8_t fb_valid_slots_num_nextcycle;
         Addr fetch_firstslot_pcaddr;
+
+        std::array<bool, 4> fetch_br_ret{0};
+        std::array<bool, 4> fetch_br_pc4{0};
+        std::array<bool, 4> fetch_br_way{0};
+        std::array<bool, 4> fetch_br_end{0};
+        std::array<bool, 4> fetch_br_taken{0};
+        std::array<uint8_t, 4> fetch_br_counter{0};
     };
 
     struct FetchDataAlginBlock
@@ -111,6 +118,14 @@ class F3Align
         std::array<bool, 4> data_fb{};
         std::array<uint8_t, 4> data_fbslot{};
         Addr fetch_algin_buffer_start_addr;
+        
+        //branch prediction
+        std::array<bool, 4> fetch_br_ret{0};
+        std::array<bool, 4> fetch_br_pc4{0};
+        std::array<bool, 4> fetch_br_way{0};
+        std::array<bool, 4> fetch_br_end{0};
+        std::array<bool, 4> fetch_br_taken{0};
+        std::array<uint8_t, 4> fetch_br_counter{0};
     };
 
     struct instruction_block
@@ -123,6 +138,12 @@ class F3Align
         bool inst1_2B;
         Addr inst0_addr;
         Addr inst1_addr;
+
+        //branch prediction
+        bool inst0_br_error;
+        bool inst1_br_error;
+        bool inst0_br_start_error;
+        bool inst1_br_start_error;
     };
 
     std::array<FetchDataBlock, 2> fetchbuffer0{};
@@ -138,6 +159,7 @@ class F3Align
             bool inst1_valid, ThreadID tid);
     void get_fetchbuffer_update(ThreadID tid);
     void get_instr(ThreadID tid, instruction_block *Instr);
+    void update_br_entries(ThreadID tid, const instruction_block &ib);
 
     std::array<bool, 2> hold{};
 

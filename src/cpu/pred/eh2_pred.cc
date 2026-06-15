@@ -102,15 +102,23 @@ eh2_pred::squash(const InstSeqNum &squashed_sn,
 eh2_pred::btblookup(Addr fetch_addr)
  {
     uint8_t hit_ways = 0;
-   force_taken = 0;
+    force_taken = 0;
     tag_match_vway1_expanded_f2 = 0;
-    ifu_bp_ret_f2 = 0;
-    ifu_bp_pc4_f2 = 0;
+    fetch_br_ret.fill(0);
+    fetch_br_pc4.fill(0);
+    fetch_br_way.fill(0);
+    fetch_br_end.fill(0);
     
     for(int i = 0; i < 4; i++) {
     hitWays[i] = btb->findWay(fetch_addr + 2*i);
     if(hitWays[i] != nullptr) {
+        
         hit_ways |= (1 << i);
+        
+        if(!dec_tlu_bpred_disable)
+        {
+            fetch_br_end[i] = true;
+        }
         
         //if call or return, set force_taken
         if(hitWays[i]->call || hitWays[i]->ret)
@@ -122,19 +130,23 @@ eh2_pred::btblookup(Addr fetch_addr)
         if(hitWays[i]->used_way)
         {
             tag_match_vway1_expanded_f2 |= (1 << i);
+            fetch_br_way[i] = true;
         }
 
         //used for updating output ifu_bp_ret_f2
         if(hitWays[i]->ret && !hitWays[i]->call)
         {
-            ifu_bp_ret_f2 |= (1 << i);
+            fetch_br_ret[i] = true;
         }
 
         //used for updating output ifu_bp_pc4_f2
         if(hitWays[i]->pc4)
         {
-            ifu_bp_pc4_f2 |= (1 << i);
+            fetch_br_pc4[i] = true;
         }
+
+
+
     }
     }
     return hit_ways & 0xF;
@@ -153,7 +165,9 @@ eh2_pred::predict(PCStateBase &pc, ThreadID tid, Addr fetch_addr, bool ifc_fetch
 
     //lookup eh2 bht entry
     assert(bht != nullptr);
-    bht_pred = bht->eh2bhtlookup(fetch_addr, ghr[tid]);
+    fetch_br_taken.fill(0);
+    fetch_br_counter.fill(0);
+    bht_pred = bht->eh2bhtlookup(fetch_addr, ghr[tid], fetch_br_counter, fetch_br_taken);
 
     bht_dir_f2 = (btb_hit_ways & (bht_pred | force_taken)) & 0xF;
     
@@ -224,6 +238,7 @@ uint8_t
 eh2_pred::get_ifu_bp_way_f2(bool fetch_mp_collision_f2, bool exu_mp_way, unsigned exu_mp_bank, Addr fetch_addr)
  {
     uint8_t btb_vlru_rd_f2 = 0;
+    uint8_t ifu_bp_way_f2 = 0;
     uint8_t btb_vlru_rd_f2_array[4] = {0};
     unsigned btb_bank_slot[4] = {0};
 

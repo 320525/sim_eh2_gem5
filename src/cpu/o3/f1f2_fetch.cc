@@ -279,6 +279,14 @@ F1F2Fetch::tick()
         ent.nextFetchAddr = line_pc + 8;
         ent.blockAddr = fetchBufferAlignPC(line_pc);
         ent.tick = curTick();
+
+        ent.fetch_br_ret = eh2pred -> fetch_br_ret;
+        ent.fetch_br_pc4 = eh2pred -> fetch_br_pc4;
+        ent.fetch_br_way = eh2pred -> fetch_br_way;
+        ent.fetch_br_end = eh2pred -> fetch_br_end;
+        ent.fetch_br_taken = eh2pred -> fetch_br_taken;
+        ent.fetch_br_counter = eh2pred -> fetch_br_counter;
+
         toAlignF3->tid_won = tid_won;
         toAlignF3->size = 1;
 

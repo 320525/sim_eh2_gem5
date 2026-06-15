@@ -1,6 +1,7 @@
 #include "f3_align.hh"
 
 #include <cstring>
+#include <utility>
 
 #include "base/logging.hh"
 #include "cpu/o3/cpu.hh"
@@ -143,6 +144,7 @@ F3Align::tick()
     get_instr(tid_won, &instr_temp);
 
     predecodeAndMaterializeAlignedInsts(tid_won, instr_temp);
+    update_br_entries(tid_won, instr_temp);
     
     update_fetchbuffer(tid_won);
     
@@ -209,6 +211,14 @@ F3Align::update_fetchbuffer(ThreadID tid)
     {
         fetchbuffer_temp.fetchbufferdata[i] = packFetchData(2 * i);
         fetchbuffer_temp.fetchbuffervalid[i] = true;
+
+        //branch prediction
+        fetchbuffer_temp.fetch_br_ret[i] = fromF1F2->entries[tid].fetch_br_ret[i];
+        fetchbuffer_temp.fetch_br_pc4[i] = fromF1F2->entries[tid].fetch_br_pc4[i];
+        fetchbuffer_temp.fetch_br_way[i] = fromF1F2->entries[tid].fetch_br_way[i];
+        fetchbuffer_temp.fetch_br_end[i] = fromF1F2->entries[tid].fetch_br_end[i];
+        fetchbuffer_temp.fetch_br_taken[i] = fromF1F2->entries[tid].fetch_br_taken[i];
+        fetchbuffer_temp.fetch_br_counter[i] = fromF1F2->entries[tid].fetch_br_counter[i];
     }
 
     //according f0buffer and f1buffer to used slots to update themselves initially
@@ -286,6 +296,14 @@ F3Align::get_fetchdata_align(ThreadID tid, FetchDataAlginBlock* fetchdata_align)
             fetchdata_align->data2B[i] = (fetchbuffer0[tid].fetchbufferdata[i] & 0x3) != 0x3;
             fetchdata_align->data_fb[i] = 0;
             fetchdata_align->data_fbslot[i] = i;
+
+            //branch prediction
+            fetchdata_align->fetch_br_ret[i] = fetchbuffer0[tid].fetch_br_ret[i];
+            fetchdata_align->fetch_br_pc4[i] = fetchbuffer0[tid].fetch_br_pc4[i];
+            fetchdata_align->fetch_br_way[i] = fetchbuffer0[tid].fetch_br_way[i];
+            fetchdata_align->fetch_br_end[i] = fetchbuffer0[tid].fetch_br_end[i];
+            fetchdata_align->fetch_br_taken[i] = fetchbuffer0[tid].fetch_br_taken[i];
+            fetchdata_align->fetch_br_counter[i] = fetchbuffer0[tid].fetch_br_counter[i];
             //fetchdata_align->fb0_used_slots++;
             idx++;
         }
@@ -303,6 +321,14 @@ F3Align::get_fetchdata_align(ThreadID tid, FetchDataAlginBlock* fetchdata_align)
             fetchdata_align->data2B[idx] = (fetchbuffer1[tid].fetchbufferdata[i] & 0x3) != 0x3;
             fetchdata_align->data_fb[idx] = 1;
             fetchdata_align->data_fbslot[idx] = i;
+
+            //branch prediction
+            fetchdata_align->fetch_br_ret[i] = fetchbuffer1[tid].fetch_br_ret[i];
+            fetchdata_align->fetch_br_pc4[i] = fetchbuffer1[tid].fetch_br_pc4[i];
+            fetchdata_align->fetch_br_way[i] = fetchbuffer1[tid].fetch_br_way[i];
+            fetchdata_align->fetch_br_end[i] = fetchbuffer1[tid].fetch_br_end[i];
+            fetchdata_align->fetch_br_taken[i] = fetchbuffer1[tid].fetch_br_taken[i];
+            fetchdata_align->fetch_br_counter[i] = fetchbuffer1[tid].fetch_br_counter[i];
             //fetchdata_align->fb1_used_slots++;
             idx++;
         } 
@@ -415,6 +441,14 @@ F3Align::get_instr(ThreadID tid, instruction_block* Instr)
                 static_cast<uint32_t>(fetchdata_align.fetchbufferdata[low]);
     };
     
+    auto pickI1EndMeta = [](bool first2B,
+        bool second2B,
+        const std::array<bool, 4>& align4) -> bool {
+                                                    const int i1Low = first2B ? 1 : 2;
+                                                    const int i1End = i1Low + (second2B ? 0 : 1);
+                                                    return align4[i1End];
+                                                    };
+
     const int inst0_idx = 0;
     const bool inst0_2B = fetchdata_align.data2B[inst0_idx];
     const int inst1_idx = inst0_2B ? 1 : 2;
@@ -436,6 +470,23 @@ F3Align::get_instr(ThreadID tid, instruction_block* Instr)
     
     Instr->inst0 = packInst(inst0_idx, inst0_2B);
     Instr->inst1 = packInst(inst1_idx, inst1_2B);
+
+    //branch prediction
+    //generation logic of i0 br_start_error and br_error 
+    Instr->inst0_br_start_error = ~inst0_2B && fetchdata_align.fetchbuffervalid[1] && fetchdata_align.fetch_br_end[0];
+    bool i0_bp_valid = (inst0_2B && fetchdata_align.fetch_br_end[0]) || (!inst0_2B && fetchdata_align.fetch_br_end[1]) || Instr->inst0_br_start_error;
+    bool i0_bp_pc4 = (inst0_2B && fetchdata_align.fetch_br_pc4[0]) || (!inst0_2B && fetchdata_align.fetch_br_pc4[1]);
+    Instr->inst0_br_error = i0_bp_valid && ((inst0_2B && i0_bp_pc4) || (!inst0_2B && i0_bp_pc4));
+        
+    //generation logic of i1 br_start_error and br_error 
+    Instr->inst1_br_start_error = inst0_2B && !inst1_2B && fetchdata_align.fetchbuffervalid[2] && fetchdata_align.fetch_br_end[1] ||
+                                 !inst0_2B && !inst1_2B && fetchdata_align.fetchbuffervalid[3] && fetchdata_align.fetch_br_end[2];
+    bool i1_bp_valid = pickI1EndMeta(inst0_2B, inst1_2B, fetchdata_align.fetch_br_end);
+    bool i1_bp_pc4   = pickI1EndMeta(inst0_2B, inst1_2B, fetchdata_align.fetch_br_pc4);
+    Instr->inst1_br_error = i1_bp_valid && (inst0_2B && (i1_bp_pc4 && inst1_2B || !i1_bp_pc4 && !inst1_2B)) || (!inst0_2B && (i1_bp_pc4 && inst1_2B || !i1_bp_pc4 && !inst1_2B));
+
+    //end branch prediction
+
 
     update_f0f1_valid_slots(Instr->inst0_2B, Instr->inst1_2B, Instr->inst0_valid, Instr->inst1_valid, tid);
     get_fetchbuffer_update(tid);
@@ -585,5 +636,16 @@ F3Align::predecodeAndMaterializeAlignedInsts(ThreadID tid,
     emit_one(static_cast<uint32_t>(ib.inst1), ib.inst1_2B, ib.inst1_valid);
 }
 
+
+void F3Align::update_br_entries(ThreadID tid, const instruction_block &ib)
+{
+    toDecode->br_entries[tid].inst0_br_start_error = ib.inst0_br_start_error;
+    toDecode->br_entries[tid].inst0_br_error = ib.inst0_br_error;
+    toDecode->br_entries[tid].inst1_br_start_error = ib.inst1_br_start_error;
+    toDecode->br_entries[tid].inst1_br_error = ib.inst1_br_error;
+}
+
 } // namespace o3
 } // namespace gem5
+
+

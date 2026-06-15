@@ -130,10 +130,12 @@ class eh2_pred : public SimObject
     bool ifc_fetch_req_f2 = false;
 
     //output        ifu_bp_way_f2
-    uint8_t ifu_bp_way_f2 = 0;
-
-    uint8_t ifu_bp_ret_f2 = 0;
-    uint8_t ifu_bp_pc4_f2 = 0;
+    std::array<bool, 4> fetch_br_ret{0};
+    std::array<bool, 4> fetch_br_pc4{0};
+    std::array<bool, 4> fetch_br_way{0};
+    std::array<bool, 4> fetch_br_taken{0};
+    std::array<bool, 4> fetch_br_end{0};
+    std::array<uint8_t, 4> fetch_br_counter{0};
  };
  
  } // namespace branch_prediction

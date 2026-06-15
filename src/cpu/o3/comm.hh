@@ -42,6 +42,7 @@
 #ifndef __CPU_O3_COMM_HH__
 #define __CPU_O3_COMM_HH__
 
+#include <array>
 #include <vector>
 
 #include "arch/generic/pcstate.hh"
@@ -87,11 +88,19 @@ struct FetchF1F2Struct
 
         uint8_t data[8];
         uint8_t fetch_data_valid_slots;
+
+        // Branch metadata for each 16-bit fetch slot.
+        std::array<bool, 4> fetch_br_ret{};
+        std::array<bool, 4> fetch_br_pc4{};
+        std::array<bool, 4> fetch_br_way{};
+        std::array<bool, 4> fetch_br_end{};
+        std::array<bool, 4> fetch_br_taken{};
+        std::array<uint8_t, 4> fetch_br_counter{};
     };
 
     int size = 0;
-    Entry entries[2];
-    ThreadID tid_won;
+    Entry entries[MaxThreads];
+    ThreadID tid_won = InvalidThreadID;
 };
 
 
@@ -106,12 +115,21 @@ struct AlignF3Struct
     Fault fetchFault;
     InstSeqNum fetchFaultSN;
     bool clearFetchFault;
+
+    struct BrEntry
+    {
+        bool inst0_br_start_error = false;
+        bool inst0_br_error = false;
+        bool inst1_br_start_error = false;
+        bool inst1_br_error = false;
+    };
+    BrEntry br_entries[MaxThreads];
 };
 
 struct F3ToF1F2Struct
 {
-    bool fb_consume1[2]{};
-    bool fb_consume2[2]{};
+    bool fb_consume1[MaxThreads]{};
+    bool fb_consume2[MaxThreads]{};
 };
 
 /** Struct that defines the information passed from fetch to decode. */
