@@ -590,7 +590,7 @@ F3Align::predecodeAndMaterializeAlignedInsts(ThreadID tid,
     std::unique_ptr<PCStateBase> cur_pc(cpu->pcState(tid).clone());
     cur_pc->set(fetch_entry.fetchAddr);
 
-    auto emit_one = [&](uint32_t word, bool is_2B, bool valid) {
+    auto emit_one = [&](unsigned slot, uint32_t word, bool is_2B, bool valid) {
         if (!valid) {
             return;
         }
@@ -624,25 +624,37 @@ F3Align::predecodeAndMaterializeAlignedInsts(ThreadID tid,
         DynInstPtr dyn = buildDynInst(tid, static_inst, nullptr,
                 *decode_pc, *next_pc, true);
 
-        toDecode->insts[toDecode->size++] = dyn;
+        toDecode->entries[tid].insts[slot] = dyn;
+        ++toDecode->size;
 
-        DPRINTF(Fetch, "[tid:%i] F3 align -> decode slot %i sn:%lli\n",
-                tid, toDecode->size - 1, dyn->seqNum);
+        DPRINTF(Fetch, "[tid:%i] F3 align -> decode entry slot %u sn:%lli\n",
+                tid, slot, dyn->seqNum);
 
         set(*cur_pc, *next_pc);
     };
 
-    emit_one(static_cast<uint32_t>(ib.inst0), ib.inst0_2B, ib.inst0_valid);
-    emit_one(static_cast<uint32_t>(ib.inst1), ib.inst1_2B, ib.inst1_valid);
+    emit_one(0, static_cast<uint32_t>(ib.inst0), ib.inst0_2B, ib.inst0_valid);
+    emit_one(1, static_cast<uint32_t>(ib.inst1), ib.inst1_2B, ib.inst1_valid);
 }
 
 
-void F3Align::update_br_entries(ThreadID tid, const instruction_block &ib)
+void F3Align::update_entries(ThreadID tid, const instruction_block &ib)
 {
-    toDecode->br_entries[tid].inst0_br_start_error = ib.inst0_br_start_error;
-    toDecode->br_entries[tid].inst0_br_error = ib.inst0_br_error;
-    toDecode->br_entries[tid].inst1_br_start_error = ib.inst1_br_start_error;
-    toDecode->br_entries[tid].inst1_br_error = ib.inst1_br_error;
+    //br package
+    toDecode->entries[tid].inst0_br_start_error = ib.inst0_br_start_error;
+    toDecode->entries[tid].inst0_br_error = ib.inst0_br_error;
+    toDecode->entries[tid].inst1_br_start_error = ib.inst1_br_start_error;
+    toDecode->entries[tid].inst1_br_error = ib.inst1_br_error;
+
+    //inst 
+    toDecode->entries[tid].inst0_valid = ib.inst0_valid;
+    toDecode->entries[tid].inst1_valid = ib.inst1_valid;
+    toDecode->entries[tid].inst0_2B = ib.inst0_2B;
+    toDecode->entries[tid].inst1_2B = ib.inst1_2B;
+    toDecode->entries[tid].inst0_addr = ib.inst0_addr;
+    toDecode->entries[tid].inst1_addr = ib.inst1_addr;
+    toDecode->entries[tid].inst0 = ib.inst0;
+    toDecode->entries[tid].inst1 = ib.inst1;
 }
 
 } // namespace o3

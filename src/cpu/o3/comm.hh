@@ -89,7 +89,7 @@ struct FetchF1F2Struct
         uint8_t data[8];
         uint8_t fetch_data_valid_slots;
 
-        // Branch metadata for each 16-bit fetch slot.
+        //br package
         std::array<bool, 4> fetch_br_ret{};
         std::array<bool, 4> fetch_br_pc4{};
         std::array<bool, 4> fetch_br_way{};
@@ -99,8 +99,8 @@ struct FetchF1F2Struct
     };
 
     int size = 0;
-    Entry entries[MaxThreads];
-    ThreadID tid_won = InvalidThreadID;
+    Entry entries[2];
+    ThreadID tid_won;
 };
 
 
@@ -110,26 +110,40 @@ struct AlignF3Struct
 {
     /** Same contract as \ref FetchStruct: DynInstPtr batch to Decode. */
     int size = 0;
-    DynInstPtr insts[MaxWidth];
 
     Fault fetchFault;
     InstSeqNum fetchFaultSN;
     bool clearFetchFault;
 
-    struct BrEntry
-    {
-        bool inst0_br_start_error = false;
-        bool inst0_br_error = false;
-        bool inst1_br_start_error = false;
-        bool inst1_br_error = false;
+    //br package
+    struct Entry{
+        //br package
+            bool inst0_br_start_error = false;
+            bool inst0_br_error = false;
+            bool inst1_br_start_error = false;
+            bool inst1_br_error = false;
+
+        //inst
+            bool inst0_valid = false;
+            bool inst1_valid = false;
+            bool inst0_2B = false;
+            bool inst1_2B = false;
+            Addr inst0_addr = 0;
+            Addr inst1_addr = 0;
+            DynInstPtr insts[2];
+
+            uint32_t inst0 = 0;
+            uint32_t inst1 = 0;
     };
-    BrEntry br_entries[MaxThreads];
+    Entry entries[2];
+    
+
 };
 
 struct F3ToF1F2Struct
 {
-    bool fb_consume1[MaxThreads]{};
-    bool fb_consume2[MaxThreads]{};
+    bool fb_consume1[2]{};
+    bool fb_consume2[2]{};
 };
 
 /** Struct that defines the information passed from fetch to decode. */
